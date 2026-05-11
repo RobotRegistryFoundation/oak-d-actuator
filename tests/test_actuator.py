@@ -103,3 +103,20 @@ def test_actuator_perceive_telemetry_is_json_serializable():
     serialized = json.dumps(out.telemetry)
     restored = json.loads(serialized)
     assert restored == out.telemetry
+
+
+def test_actuator_entry_point_registration():
+    from importlib.metadata import entry_points
+    eps = [ep for ep in entry_points() if ep.group == "robot_md_gateway.actuators"]
+    names = [ep.name for ep in eps]
+    assert "oak-d" in names, f"oak-d entry-point missing; got {names}"
+    target = next(ep for ep in eps if ep.name == "oak-d").load()
+    assert target.__name__ == "OakDActuator"
+
+
+def test_top_level_exports_include_actuator_and_perception():
+    import oak_d_actuator
+    assert "OakDActuator" in oak_d_actuator.__all__
+    assert "BlobResult" in oak_d_actuator.__all__
+    assert "find_red_blob" in oak_d_actuator.__all__
+    assert "find_bowl_top" in oak_d_actuator.__all__
