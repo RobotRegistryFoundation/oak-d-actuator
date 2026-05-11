@@ -32,3 +32,86 @@ def test_bowl_thresholds_are_what_the_spec_says():
     assert BOWL_DEPTH_MIN_MM == 200
     assert BOWL_DEPTH_MAX_MM == 350
     assert BOWL_MIN_AREA_PX == 3000
+
+
+from oak_d_actuator.perception import find_red_blob
+
+
+def _zeros_rgb(h: int = 480, w: int = 640) -> np.ndarray:
+    return np.zeros((h, w, 3), dtype=np.uint8)
+
+
+def _zeros_depth(h: int = 480, w: int = 640) -> np.ndarray:
+    return np.zeros((h, w), dtype=np.uint16)
+
+
+def _put_red_patch(rgb: np.ndarray, u: int = 300, v: int = 200, size: int = 30) -> np.ndarray:
+    # BGR red (depthai/OpenCV convention)
+    rgb[v:v + size, u:u + size] = [0, 0, 255]
+    return rgb
+
+
+def test_red_blob_not_found_on_zero_frame():
+    r = find_red_blob(_zeros_rgb(), _zeros_depth())
+    assert r.found is False
+    assert r.pixel_count == 0
+
+
+def test_red_blob_found_on_red_patch():
+    rgb = _put_red_patch(_zeros_rgb())
+    depth = _zeros_depth()
+    depth[200:230, 300:330] = 327  # mm
+    r = find_red_blob(rgb, depth)
+    assert r.found is True
+    assert r.pixel_count >= 150
+    cu, cv = r.centroid_px
+    assert 295 <= cu <= 335
+    assert 195 <= cv <= 235
+    assert r.centroid_depth_mm == 327
+
+
+def test_red_blob_returns_largest_when_two_regions():
+    rgb = _zeros_rgb()
+    rgb[100:115, 100:115] = [0, 0, 255]   # small (~225 px)
+    rgb[200:240, 200:240] = [0, 0, 255]   # large (~1600 px)
+    r = find_red_blob(rgb, _zeros_depth())
+    assert r.found is True
+    cu, cv = r.centroid_px
+    assert 195 <= cu <= 245
+    assert 195 <= cv <= 245
+
+
+def test_red_blob_skips_below_min_area():
+    rgb = _zeros_rgb()
+    # 10x10 = 100 pixels, below 150 threshold
+    rgb[100:110, 100:110] = [0, 0, 255]
+    r = find_red_blob(rgb, _zeros_depth())
+    assert r.found is False
+
+
+def test_red_blob_bbox_contains_centroid():
+    rgb = _put_red_patch(_zeros_rgb())
+    r = find_red_blob(rgb, _zeros_depth())
+    u0, v0, u1, v1 = r.bbox_px
+    cu, cv = r.centroid_px
+    assert u0 <= cu <= u1
+    assert v0 <= cv <= v1
+
+
+def test_red_blob_provenance_records_thresholds():
+    rgb = _put_red_patch(_zeros_rgb())
+    r = find_red_blob(rgb, _zeros_depth())
+    p = r.provenance
+    assert p["min_area_px"] == 150
+    assert p["hsv_low_1"] == [0, 120, 80]
+    assert p["hsv_high_1"] == [10, 255, 255]
+    assert p["hsv_low_2"] == [170, 120, 80]
+    assert p["hsv_high_2"] == [180, 255, 255]
+
+
+def test_red_blob_depth_none_when_all_zero_in_mask():
+    # Red patch present but depth frame is all zeros → median depth is None
+    rgb = _put_red_patch(_zeros_rgb())
+    r = find_red_blob(rgb, _zeros_depth())
+    assert r.found is True
+    assert r.centroid_depth_mm is None
