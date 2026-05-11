@@ -5,7 +5,6 @@ Deterministic — same input always yields same output.
 No model loading, no random sampling.
 """
 from __future__ import annotations
-import dataclasses
 from dataclasses import dataclass, field
 from typing import Optional
 
