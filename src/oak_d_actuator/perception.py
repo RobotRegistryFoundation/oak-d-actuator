@@ -101,3 +101,55 @@ def find_red_blob(rgb: np.ndarray, depth: np.ndarray) -> BlobResult:
         pixel_count=mask_pixel_count,
         provenance=provenance,
     )
+
+
+def find_bowl_top(rgb: np.ndarray, depth: np.ndarray) -> BlobResult:
+    """Find the largest depth region in the bowl-top band; ignore RGB.
+
+    The bowl is segmented purely by depth — assumes a bird's-eye OAK-D mount
+    pointed at the workspace; the bowl rim sits in [BOWL_DEPTH_MIN_MM,
+    BOWL_DEPTH_MAX_MM] from the camera.
+    """
+    provenance = {
+        "bowl_depth_min_mm": BOWL_DEPTH_MIN_MM,
+        "bowl_depth_max_mm": BOWL_DEPTH_MAX_MM,
+        "min_area_px": BOWL_MIN_AREA_PX,
+    }
+    band = ((depth >= BOWL_DEPTH_MIN_MM) & (depth <= BOWL_DEPTH_MAX_MM)).astype(np.uint8) * 255
+    kernel = np.ones((MORPHOLOGY_KERNEL_SIZE, MORPHOLOGY_KERNEL_SIZE), np.uint8)
+    band = cv2.morphologyEx(band, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(band, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return BlobResult(found=False, provenance=provenance)
+    largest = max(contours, key=cv2.contourArea)
+    # Gate uses cv2.contourArea (Green's-theorem polygon area).
+    area = int(cv2.contourArea(largest))
+    if area < BOWL_MIN_AREA_PX:
+        # Sub-threshold branch returns contour area so callers see how close
+        # the largest candidate got to BOWL_MIN_AREA_PX.
+        return BlobResult(found=False, pixel_count=area, provenance=provenance)
+    moments = cv2.moments(largest)
+    if moments["m00"] == 0:
+        return BlobResult(found=False, pixel_count=area, provenance=provenance)
+    cu = int(moments["m10"] / moments["m00"])
+    cv_centroid = int(moments["m01"] / moments["m00"])
+    x, y, w, h = cv2.boundingRect(largest)
+    bbox = (int(x), int(y), int(x + w), int(y + h))
+
+    blob_mask = np.zeros_like(band)
+    cv2.drawContours(blob_mask, [largest], -1, 255, thickness=cv2.FILLED)
+    masked_depth = depth[blob_mask > 0]
+    valid = masked_depth[masked_depth > 0]
+    median_depth = int(np.median(valid)) if valid.size > 0 else None
+
+    # Spec field doc says "number of mask pixels" — count lit pixels, not polygon area.
+    mask_pixel_count = int(cv2.countNonZero(blob_mask))
+    return BlobResult(
+        found=True,
+        centroid_px=(cu, cv_centroid),
+        centroid_depth_mm=median_depth,
+        bbox_px=bbox,
+        pixel_count=mask_pixel_count,
+        provenance=provenance,
+    )
