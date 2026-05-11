@@ -69,8 +69,12 @@ def find_red_blob(rgb: np.ndarray, depth: np.ndarray) -> BlobResult:
     if not contours:
         return BlobResult(found=False, provenance=provenance)
     largest = max(contours, key=cv2.contourArea)
+    # Gate uses cv2.contourArea (Green's-theorem polygon area). The fill-mask
+    # is not yet drawn at this point, so this is the cheapest correct gate.
     area = int(cv2.contourArea(largest))
     if area < RED_MIN_AREA_PX:
+        # Sub-threshold branch returns contour area so callers can see how close
+        # the largest candidate got to RED_MIN_AREA_PX.
         return BlobResult(found=False, pixel_count=area, provenance=provenance)
     moments = cv2.moments(largest)
     if moments["m00"] == 0:
@@ -86,11 +90,14 @@ def find_red_blob(rgb: np.ndarray, depth: np.ndarray) -> BlobResult:
     valid = masked_depth[masked_depth > 0]
     median_depth = int(np.median(valid)) if valid.size > 0 else None
 
+    # Spec field doc says "number of mask pixels" — count lit pixels in the
+    # filled raster mask, not the Green's-theorem polygon area.
+    mask_pixel_count = int(cv2.countNonZero(blob_mask))
     return BlobResult(
         found=True,
         centroid_px=(cu, cv_centroid),
         centroid_depth_mm=median_depth,
         bbox_px=bbox,
-        pixel_count=area,
+        pixel_count=mask_pixel_count,
         provenance=provenance,
     )

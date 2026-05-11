@@ -1,5 +1,6 @@
 """Unit tests for oak_d_actuator.perception primitives."""
 from __future__ import annotations
+import cv2  # type: ignore[import]
 import numpy as np
 import pytest
 
@@ -7,6 +8,7 @@ from oak_d_actuator.perception import (
     BlobResult,
     RED_HSV_LOW_1, RED_HSV_HIGH_1, RED_HSV_LOW_2, RED_HSV_HIGH_2, RED_MIN_AREA_PX,
     BOWL_DEPTH_MIN_MM, BOWL_DEPTH_MAX_MM, BOWL_MIN_AREA_PX,
+    find_red_blob,
 )
 
 
@@ -32,9 +34,6 @@ def test_bowl_thresholds_are_what_the_spec_says():
     assert BOWL_DEPTH_MIN_MM == 200
     assert BOWL_DEPTH_MAX_MM == 350
     assert BOWL_MIN_AREA_PX == 3000
-
-
-from oak_d_actuator.perception import find_red_blob
 
 
 def _zeros_rgb(h: int = 480, w: int = 640) -> np.ndarray:
@@ -115,3 +114,12 @@ def test_red_blob_depth_none_when_all_zero_in_mask():
     r = find_red_blob(rgb, _zeros_depth())
     assert r.found is True
     assert r.centroid_depth_mm is None
+
+
+def test_red_blob_found_on_high_hue_red():
+    """Exercises mask2 (hue range [170, 180]) so a transposed mask1/mask2 bug surfaces."""
+    hsv_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    hsv_frame[200:230, 300:330] = [175, 200, 200]  # H=175 (in mask2 range), S=200, V=200
+    rgb = cv2.cvtColor(hsv_frame, cv2.COLOR_HSV2BGR)
+    r = find_red_blob(rgb, _zeros_depth())
+    assert r.found is True
