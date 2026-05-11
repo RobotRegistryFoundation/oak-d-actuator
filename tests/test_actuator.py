@@ -107,7 +107,7 @@ def test_actuator_perceive_telemetry_is_json_serializable():
 
 def test_actuator_entry_point_registration():
     from importlib.metadata import entry_points
-    eps = [ep for ep in entry_points() if ep.group == "robot_md_gateway.actuators"]
+    eps = list(entry_points(group="robot_md_gateway.actuators"))
     names = [ep.name for ep in eps]
     assert "oak-d" in names, f"oak-d entry-point missing; got {names}"
     target = next(ep for ep in eps if ep.name == "oak-d").load()
