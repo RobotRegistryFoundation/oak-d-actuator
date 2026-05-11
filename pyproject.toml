@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oak-d-actuator"
+version = "0.1.0"
+description = "Thin OAK-D depth+RGB wrapper for the robot-md ecosystem. RPN-000000000003."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Robot Registry Foundation" }]
+requires-python = ">=3.10"
+dependencies = [
+    "depthai>=3.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-mock>=3", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/RobotRegistryFoundation/oak-d-actuator"
+"Bug Tracker" = "https://github.com/RobotRegistryFoundation/oak-d-actuator/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
