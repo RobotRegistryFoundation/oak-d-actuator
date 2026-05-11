@@ -9,6 +9,7 @@ from oak_d_actuator.perception import (
     RED_HSV_LOW_1, RED_HSV_HIGH_1, RED_HSV_LOW_2, RED_HSV_HIGH_2, RED_MIN_AREA_PX,
     BOWL_DEPTH_MIN_MM, BOWL_DEPTH_MAX_MM, BOWL_MIN_AREA_PX,
     find_red_blob,
+    find_bowl_top,
 )
 
 
@@ -123,3 +124,35 @@ def test_red_blob_found_on_high_hue_red():
     rgb = cv2.cvtColor(hsv_frame, cv2.COLOR_HSV2BGR)
     r = find_red_blob(rgb, _zeros_depth())
     assert r.found is True
+
+
+def test_bowl_top_not_found_on_zero_depth():
+    r = find_bowl_top(_zeros_rgb(), _zeros_depth())
+    assert r.found is False
+
+
+def test_bowl_top_found_on_depth_band():
+    depth = _zeros_depth()
+    # 70x80 = 5600 px in band — above the 3000 px threshold
+    depth[100:170, 100:180] = 280  # within 200-350 band
+    r = find_bowl_top(_zeros_rgb(), depth)
+    assert r.found is True
+    cu, cv = r.centroid_px
+    assert 135 <= cu <= 145
+    assert 130 <= cv <= 140
+    assert r.centroid_depth_mm == 280
+
+
+def test_bowl_top_excludes_depths_outside_band():
+    depth = _zeros_depth()
+    depth[100:170, 100:180] = 100  # too close (< 200mm)
+    r = find_bowl_top(_zeros_rgb(), depth)
+    assert r.found is False
+
+
+def test_bowl_top_skips_below_min_area():
+    depth = _zeros_depth()
+    # 30x30 = 900 px, below 3000 threshold
+    depth[100:130, 100:130] = 280
+    r = find_bowl_top(_zeros_rgb(), depth)
+    assert r.found is False
