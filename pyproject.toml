@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oak-d-actuator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Thin OAK-D depth+RGB wrapper for the robot-md ecosystem. RPN-000000000003."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -28,3 +28,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[project.entry-points."robot_md_gateway.actuators"]
+oak-d = "oak_d_actuator.actuator:OakDActuator"
