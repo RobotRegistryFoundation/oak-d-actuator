@@ -62,3 +62,38 @@ class Camera:
         except Exception:
             pass
         self._closed = True
+
+    _STREAM_TO_SOCKET = {
+        "rgb": "CAM_A",
+        "left": "CAM_B",
+        "right": "CAM_C",
+    }
+
+    def get_intrinsics(self, *, stream: str = "rgb") -> dict:
+        """Read factory-calibrated intrinsics for a given stream.
+
+        Returns a dict with fx, fy, cx, cy, distortion_model, distortion_coeffs,
+        width, height, provenance. Resolution matches Camera's construct-time
+        rgb_width/rgb_height.
+        """
+        socket_attr = self._STREAM_TO_SOCKET.get(stream)
+        if socket_attr is None:
+            raise ValueError(
+                f"unknown stream {stream!r}; supported: {list(self._STREAM_TO_SOCKET)}"
+            )
+        calib = self._device.readCalibration()
+        socket = getattr(self._dai.CameraBoardSocket, socket_attr)
+        # depthai returns intrinsics scaled to the requested resolution
+        K = calib.getCameraIntrinsics(socket, self._rgb_width, self._rgb_height)
+        coeffs = list(calib.getDistortionCoefficients(socket))[:5]
+        return {
+            "fx": float(K[0][0]),
+            "fy": float(K[1][1]),
+            "cx": float(K[0][2]),
+            "cy": float(K[1][2]),
+            "distortion_model": "plumb_bob",
+            "distortion_coeffs": [float(c) for c in coeffs],
+            "width": self._rgb_width,
+            "height": self._rgb_height,
+            "provenance": "depthai factory cal",
+        }
