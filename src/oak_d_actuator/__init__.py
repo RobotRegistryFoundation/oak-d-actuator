@@ -6,9 +6,11 @@ RPN-000000000003 in the RRF transparency log.
 
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
+from oak_d_actuator.discover import discover, DetectedOakDevice
+
 try:
     __version__ = _pkg_version("oak-d-actuator")
 except PackageNotFoundError:
     __version__ = "0.0.0+source"
 
-__all__ = ["__version__"]
+__all__ = ["__version__", "discover", "DetectedOakDevice"]
