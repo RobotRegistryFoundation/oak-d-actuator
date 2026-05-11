@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oak-d-actuator"
-version = "0.2.0"
+version = "0.2.1"
 description = "Thin OAK-D depth+RGB wrapper for the robot-md ecosystem. RPN-000000000003."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Robot Registry Foundation" }]
 requires-python = ">=3.10"
 dependencies = [
-    "depthai>=3.0",
+    "depthai>=2.30,<3",
     "numpy>=1.24",
     "opencv-python-headless>=4.8",
 ]
