@@ -2,9 +2,12 @@
 from __future__ import annotations
 from unittest.mock import MagicMock
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
+
+MANIFEST = Path("/tmp/ROBOT.md")
 
 
 def test_actuator_capabilities_include_perceive():
@@ -21,7 +24,7 @@ def test_actuator_perceive_red_blob_on_zero_frame_returns_not_found():
     cam.read_rgb.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
     cam.read_depth.return_value = np.zeros((480, 640), dtype=np.uint16)
     a = OakDActuator(camera=cam)
-    outcome = a.execute("perceive", {"query": "red_blob"})
+    outcome = a.execute(envelope={"tool_name": "perceive", "tool_args": {"query": "red_blob"}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert outcome.success is True
     assert outcome.telemetry["found"] is False
 
@@ -29,9 +32,9 @@ def test_actuator_perceive_red_blob_on_zero_frame_returns_not_found():
 def test_actuator_perceive_rejects_unknown_query():
     from oak_d_actuator.actuator import OakDActuator
     a = OakDActuator(camera=MagicMock())
-    outcome = a.execute("perceive", {"query": "bogus"})
+    outcome = a.execute(envelope={"tool_name": "perceive", "tool_args": {"query": "bogus"}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert outcome.success is False
-    assert "unknown query" in (outcome.error or "")
+    assert "unknown query" in (outcome.error_message or "")
 
 
 def test_actuator_read_rgb_returns_shape_only_not_pixels():
@@ -39,7 +42,7 @@ def test_actuator_read_rgb_returns_shape_only_not_pixels():
     cam = MagicMock()
     cam.read_rgb.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
     a = OakDActuator(camera=cam)
-    outcome = a.execute("read_rgb", {})
+    outcome = a.execute(envelope={"tool_name": "read_rgb", "tool_args": {}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert outcome.success is True
     assert outcome.telemetry["shape"] == [480, 640, 3]
     assert outcome.telemetry["dtype"] == "uint8"
@@ -49,9 +52,9 @@ def test_actuator_read_rgb_returns_shape_only_not_pixels():
 def test_actuator_unknown_tool_name():
     from oak_d_actuator.actuator import OakDActuator
     a = OakDActuator(camera=MagicMock())
-    outcome = a.execute("nope", {})
+    outcome = a.execute(envelope={"tool_name": "nope", "tool_args": {}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert outcome.success is False
-    assert "unknown tool_name" in (outcome.error or "")
+    assert "unknown capability" in (outcome.error_message or "")  # arm-driver-parity wording
 
 
 def test_actuator_perceive_red_blob_routes_to_perception_fn(monkeypatch):
@@ -72,7 +75,7 @@ def test_actuator_perceive_red_blob_routes_to_perception_fn(monkeypatch):
         provenance={"x": 1},
     )
     monkeypatch.setattr(mod, "find_red_blob", lambda r, d: sentinel)
-    outcome = a.execute("perceive", {"query": "red_blob"})
+    outcome = a.execute(envelope={"tool_name": "perceive", "tool_args": {"query": "red_blob"}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert outcome.success is True
     assert outcome.telemetry["found"] is True
     assert outcome.telemetry["centroid_px"] == [50, 50]
@@ -97,7 +100,7 @@ def test_actuator_perceive_telemetry_is_json_serializable():
     cam.read_rgb.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
     cam.read_depth.return_value = np.zeros((480, 640), dtype=np.uint16)
     a = OakDActuator(camera=cam)
-    out = a.execute("perceive", {"query": "red_blob"})
+    out = a.execute(envelope={"tool_name": "perceive", "tool_args": {"query": "red_blob"}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
     assert out.success is True
     # Round-trip through json.dumps — raises TypeError if any non-JSON-safe type leaks.
     serialized = json.dumps(out.telemetry)
@@ -120,3 +123,22 @@ def test_top_level_exports_include_actuator_and_perception():
     assert "BlobResult" in oak_d_actuator.__all__
     assert "find_red_blob" in oak_d_actuator.__all__
     assert "find_bowl_top" in oak_d_actuator.__all__
+
+
+def test_actuator_conforms_to_keyword_only_protocol():
+    """gateway#28 regression: the dispatcher calls execute(envelope=..., ...).
+
+    The positional 0.2.x form TypeError'd on every gateway dispatch. Pin the
+    keyword-only signature and the canonical outcome fields.
+    """
+    import inspect
+    from oak_d_actuator.actuator import OakDActuator
+    sig = inspect.signature(OakDActuator.execute)
+    params = list(sig.parameters.values())[1:]  # drop self
+    assert [p.name for p in params] == ["envelope", "manifest_path", "tier", "config"]
+    assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params)
+    from unittest.mock import MagicMock
+    a = OakDActuator(camera=MagicMock())
+    out = a.execute(envelope={"tool_name": "nope", "tool_args": {}}, manifest_path=MANIFEST, tier="OBSERVE", config={})
+    assert out.outcome_kind == "error"
+    assert out.success is False
