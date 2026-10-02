@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.2] — 2026-10-02
+
+### Fixed
+- `OakDActuator.execute()` now takes the gateway's Actuator Protocol call,
+  `execute(*, envelope, manifest_path, tier, config)`. It still took
+  `(tool_name, tool_args)`, so every invoke through robot-md-gateway failed
+  with `TypeError: unexpected keyword argument 'envelope'` before reaching
+  the camera (robot-md-gateway#28). `ActuatorOutcome` gains the fields the
+  gateway reads (`outcome_kind`, `error_message`, `telemetry_path`); `.error`
+  remains as a read-only alias of `error_message`. A test pins both shapes to
+  the gateway's own definitions when the gateway is installed.
+
 ## [0.2.1] — 2026-05-11
 
 ### Fixed
