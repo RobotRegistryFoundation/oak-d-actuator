@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-11-14
+
+0.2.2 was prepared on 2026-10-02 and never published; it ships here with
+both fixes.
+
 ### Fixed
 - `OakDActuator` declares `motion_capabilities` and `stop_capabilities`, both
   empty. robot-md-gateway#35 refuses to be cleared (armed) while any configured
@@ -10,10 +15,6 @@
   beside the arm, as on bob, a valid signed clear was answered 409 and the
   gateway stayed held. A test arms such a gateway when #35 or later is
   installed.
-
-## [0.2.2] — 2026-10-02
-
-### Fixed
 - `OakDActuator.execute()` now takes the gateway's Actuator Protocol call,
   `execute(*, envelope, manifest_path, tier, config)`. It still took
   `(tool_name, tool_args)`, so every invoke through robot-md-gateway failed
