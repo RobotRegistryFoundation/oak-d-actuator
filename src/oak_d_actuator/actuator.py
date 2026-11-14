@@ -62,6 +62,14 @@ class OakDActuator:
     description = "OAK-D depth+RGB sensor as Actuator Protocol read-only sensor. RPN-000000000003."
     capabilities = ("read_rgb", "read_depth", "perceive")
     config_schema: dict = {}
+    #: What robot-md-gateway reads about motion and stops. A camera moves
+    #: nothing and has nothing to stop, and says so with two empty sets. From
+    #: robot-md-gateway#35 on, an actuator that declares neither attribute is
+    #: taken to be one that may move anything with no stop the gateway can
+    #: send, and the gateway then refuses to be cleared (armed) while it is
+    #: configured. Empty is a declaration; missing is not.
+    motion_capabilities: frozenset[str] = frozenset()
+    stop_capabilities: frozenset[str] = frozenset()
 
     def __init__(self, camera: Optional[Camera] = None) -> None:
         self._camera = camera

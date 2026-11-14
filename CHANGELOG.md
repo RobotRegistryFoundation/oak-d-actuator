@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- `OakDActuator` declares `motion_capabilities` and `stop_capabilities`, both
+  empty. robot-md-gateway#35 refuses to be cleared (armed) while any configured
+  actuator may move and declares no stop, and it reads an actuator that
+  declares neither attribute as one that may move anything. With this camera
+  beside the arm, as on bob, a valid signed clear was answered 409 and the
+  gateway stayed held. A test arms such a gateway when #35 or later is
+  installed.
+
 ## [0.2.2] — 2026-10-02
 
 ### Fixed

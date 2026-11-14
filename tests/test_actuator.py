@@ -152,3 +152,67 @@ def test_matches_the_gateway_actuator_protocol():
     )
     gw_fields = {f.name for f in dataclasses.fields(gw.ActuatorOutcome)}
     assert gw_fields <= {f.name for f in dataclasses.fields(ActuatorOutcome)}
+
+
+def test_declares_that_it_moves_nothing_and_has_nothing_to_stop():
+    """robot-md-gateway#35 reads `motion_capabilities` and `stop_capabilities`.
+    An actuator with neither may move anything as far as the gateway knows,
+    and the gateway then refuses to be cleared while it is configured: bob,
+    with this camera beside its arm, could never be armed. Empty sets say a
+    camera moves nothing; None or a missing attribute would not."""
+    from oak_d_actuator.actuator import OakDActuator
+
+    for declared in (OakDActuator, OakDActuator(camera=MagicMock())):
+        assert declared.motion_capabilities == frozenset()
+        assert isinstance(declared.motion_capabilities, frozenset)
+        assert declared.stop_capabilities == frozenset()
+        assert isinstance(declared.stop_capabilities, frozenset)
+
+
+def test_a_gateway_with_this_camera_beside_an_arm_can_be_armed():
+    """The gateway's clear, with this camera and an arm that declares its stop,
+    as on bob. Needs robot-md-gateway#35 or later installed: without its
+    safety routes there is no clear to check, and the test skips."""
+    import types
+
+    receiver = pytest.importorskip("robot_md_gateway.receiver")
+    actuator_mod = pytest.importorskip("robot_md_gateway.actuator")
+    safety = pytest.importorskip("robot_md_gateway.cert.safety")
+    from fastapi.testclient import TestClient
+
+    from oak_d_actuator.actuator import OakDActuator
+
+    class Arm:
+        name, description, config_schema = "so-arm101", "an arm that declares its stop", {}
+        motion_capabilities = frozenset({"arm.move_to"})
+        stop_capabilities = frozenset({"arm.estop"})
+
+        def execute(self, *, envelope, manifest_path, tier, config):
+            return actuator_mod.ActuatorOutcome(success=True, outcome_kind="executed")
+
+    class NoKeys:
+        def resolve_public_key_pem(self, kid):
+            return None
+
+    supervisor, commission = "s" * 43, "c" * 43
+    held = safety.SafetyMonitor(state=safety.GatewayState.SAFE_STOP,
+                                last_heartbeat_at=float("-inf"))
+    app = receiver.make_app(
+        resolver=NoKeys(), safety_monitor=held,
+        actuators={"so-arm101": Arm(), "oak-d": OakDActuator(camera=MagicMock())},
+        actuator_configs={},
+        bearers={supervisor: types.SimpleNamespace(tier="read", caller_id="pendant",
+                                                   role="supervisor"),
+                 commission: types.SimpleNamespace(tier="commission", caller_id="operator",
+                                                   role=None)},
+    )
+    if "/v1/safety/clear" not in {getattr(r, "path", None) for r in app.routes}:
+        pytest.skip("this robot-md-gateway has no safety clear (robot-md-gateway#35)")
+    with TestClient(app) as client:
+        beat = client.post("/v1/safety/heartbeat",
+                           headers={"Authorization": f"Bearer {supervisor}"})
+        cleared = client.post("/v1/safety/clear",
+                              headers={"Authorization": f"Bearer {commission}"})
+    assert beat.status_code == 200, beat.text
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["state"] == "ready"
